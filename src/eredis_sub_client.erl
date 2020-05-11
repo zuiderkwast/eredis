@@ -214,8 +214,8 @@ handle_info({'DOWN', Ref, process, Pid, _Reason},
 handle_info(stop, State) ->
     {stop, shutdown, State};
 
-handle_info(_Info, State) ->
-    {stop, {unhandled_message, _Info}, State}.
+handle_info(Info, State) ->
+    {stop, {unhandled_message, Info}, State}.
 
 terminate(_Reason, State) ->
     case State#state.socket of

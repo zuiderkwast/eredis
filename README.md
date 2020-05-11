@@ -12,20 +12,24 @@ Supported Redis features:
 
 ## Example
 
-If you have Redis running on localhost, with default settings, you may
-copy and paste the following into a shell to try out Eredis:
+If you have Redis running on localhost with default settings, like:
+
+    docker run --rm --net=host redis:latest
+
+you may copy and paste the following into a shell to try out Eredis:
 
     git clone git://github.com/wooga/eredis.git
     cd eredis
-    ./rebar compile
-    erl -pa ebin/
+    rebar3 shell
     {ok, C} = eredis:start_link().
     {ok, <<"OK">>} = eredis:q(C, ["SET", "foo", "bar"]).
     {ok, <<"bar">>} = eredis:q(C, ["GET", "foo"]).
 
 To connect to a Redis instance listening on a Unix domain socket:
 
-    {ok, C1} = eredis:start_link({local, "/var/run/redis.sock"}, 0).
+```erlang
+{ok, C1} = eredis:start_link({local, "/var/run/redis.sock"}, 0).
+```
 
 MSET and MGET:
 
@@ -39,7 +43,7 @@ HASH
 
 ```erlang
 HashObj = ["id", "objectId", "message", "message", "receiver", "receiver", "status", "read"].
-eredis:q(C, ["HMSET", "key" | HashObj]).
+{ok, <<"OK">>} = eredis:q(C, ["HMSET", "key" | HashObj]).
 {ok, Values} = eredis:q(C, ["HGETALL", "key"]).
 ```
 
@@ -48,7 +52,7 @@ LIST
 ```erlang
 eredis:q(C, ["LPUSH", "keylist", "value"]).
 eredis:q(C, ["RPUSH", "keylist", "value"]).
-eredis:q(C, ["LRANGE", "keylist",0,-1]).
+eredis:q(C, ["LRANGE", "keylist", 0, -1]).
 ```
 
 Transactions:
@@ -71,32 +75,27 @@ P1 = [["SET", a, "1"],
 
 Pubsub:
 
-```erl
+```erlang
 1> eredis_sub:sub_example().
 received {subscribed,<<"foo">>,<0.34.0>}
 {<0.34.0>,<0.37.0>}
 2> eredis_sub:pub_example().
 received {message,<<"foo">>,<<"bar">>,<0.34.0>}
+ok
+3>
 ```
 
 Pattern Subscribe:
-    
-```erl
-1> eredis_sub:psub_example(). 
+
+```erlang
+1> eredis_sub:psub_example().
 received {subscribed,<<"foo*">>,<0.33.0>}
 {<0.33.0>,<0.36.0>}
 2> eredis_sub:ppub_example().
 received {pmessage,<<"foo*">>,<<"foo123">>,<<"bar">>,<0.33.0>}
 ok
-3> 
+3>
 ```
-
-EUnit tests:
-
-```console
-./rebar eunit
-```
-
 
 ## Commands
 
@@ -218,6 +217,22 @@ parse partial responses, which makes the parser more complex.
 In order to make multibulk responses more efficient, the parser
 will parse all data available and continue where it left off when more
 data is available.
+
+## Tests and code checking
+
+EUnit tests currently requires a locally running instance of Redis.
+
+```console
+rebar3 eunit
+```
+
+Xref, dialyzer and elvis should result in no errors.
+
+```console
+rebar3 xref
+rebar3 dialyzer
+elvis rock
+```
 
 ## Future improvements
 

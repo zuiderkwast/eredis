@@ -34,18 +34,18 @@
          terminate/2, code_change/3]).
 
 -record(state, {
-          host :: string() | undefined,
-          port :: integer() | undefined,
-          password :: binary() | undefined,
-          database :: binary() | undefined,
-          reconnect_sleep :: reconnect_sleep() | undefined,
-          connect_timeout :: integer() | undefined,
-          socket_options :: list(),
+                host :: string() | {local, string()} | undefined,
+                port :: integer() | undefined,
+                password :: binary() | undefined,
+                database :: binary() | undefined,
+                reconnect_sleep :: reconnect_sleep() | undefined,
+                connect_timeout :: integer() | undefined,
+                socket_options :: list(),
 
-          socket :: port() | undefined,
-          parser_state :: #pstate{} | undefined,
-          queue :: eredis_queue() | undefined
-}).
+                socket :: port() | undefined,
+                parser_state :: #pstate{} | undefined,
+                queue :: eredis_queue() | undefined
+               }).
 
 %%
 %% API
@@ -58,7 +58,7 @@
                  ReconnectSleep::reconnect_sleep(),
                  ConnectTimeout::integer() | undefined,
                  SocketOptions::list()) ->
-                        {ok, Pid::pid()} | {error, Reason::term()}.
+          {ok, Pid::pid()} | {error, Reason::term()}.
 start_link(Host, Port, Database, Password, ReconnectSleep, ConnectTimeout, SocketOptions) ->
     gen_server:start_link(?MODULE, [Host, Port, Database, Password,
                                     ReconnectSleep, ConnectTimeout, SocketOptions], []).
@@ -171,8 +171,8 @@ handle_info(initiate_connection, #state{socket = undefined} = State) ->
             maybe_reconnect(Reason, State)
     end;
 
-handle_info(_Info, State) ->
-    {stop, {unhandled_message, _Info}, State}.
+handle_info(Info, State) ->
+    {stop, {unhandled_message, Info}, State}.
 
 terminate(_Reason, State) ->
     case State#state.socket of
@@ -188,8 +188,8 @@ code_change(_OldVsn, State, _Extra) ->
 %%% Internal functions
 %%--------------------------------------------------------------------
 
--spec do_request(Req::iolist(), From::pid(), #state{}) ->
-                        {noreply, #state{}} | {reply, Reply::any(), #state{}}.
+-spec do_request(Req::iolist(), From::pid() | undefined, #state{}) ->
+          {noreply, #state{}} | {reply, Reply::any(), #state{}}.
 %% @doc: Sends the given request to redis. If we do not have a
 %% connection, returns error.
 do_request(_Req, _From, #state{socket = undefined} = State) ->
@@ -205,7 +205,7 @@ do_request(Req, From, State) ->
     end.
 
 -spec do_pipeline(Pipeline::pipeline(), From::pid(), #state{}) ->
-                         {noreply, #state{}} | {reply, Reply::any(), #state{}}.
+          {noreply, #state{}} | {reply, Reply::any(), #state{}}.
 %% @doc: Sends the entire pipeline to redis. If we do not have a
 %% connection, returns error.
 do_pipeline(_Pipeline, _From, #state{socket = undefined} = State) ->
@@ -306,9 +306,9 @@ safe_send(Pid, Value) ->
 connect(State) ->
     {ok, {AFamily, Addr}} = get_addr(State#state.host),
     Port = case AFamily of
-        local -> 0;
-        _ -> State#state.port
-    end,
+               local -> 0;
+               _ -> State#state.port
+           end,
 
     SocketOptions = lists:ukeymerge(1, lists:keysort(1, State#state.socket_options), lists:keysort(1, ?SOCKET_OPTS)),
     ConnectOptions = [AFamily | [?SOCKET_MODE | SocketOptions]],
@@ -334,16 +334,16 @@ get_addr({local, Path}) ->
     {ok, {local, {local, Path}}};
 get_addr(Hostname) ->
     case inet:parse_address(Hostname) of
-        {ok, {_,_,_,_} = Addr} ->         {ok, {inet, Addr}};
-        {ok, {_,_,_,_,_,_,_,_} = Addr} -> {ok, {inet6, Addr}};
+        {ok, {_, _, _, _} = Addr} ->             {ok, {inet, Addr}};
+        {ok, {_, _, _, _, _, _, _, _} = Addr} -> {ok, {inet6, Addr}};
         {error, einval} ->
             case inet:getaddr(Hostname, inet6) of
-                 {error, _} ->
-                     case inet:getaddr(Hostname, inet) of
-                         {ok, Addr}-> {ok, {inet, Addr}};
-                         {error, _} = Res -> Res
-                     end;
-                 {ok, Addr} -> {ok, {inet6, Addr}}
+                {error, _} ->
+                    case inet:getaddr(Hostname, inet) of
+                        {ok, Addr}-> {ok, {inet, Addr}};
+                        {error, _} = Res -> Res
+                    end;
+                {ok, Addr} -> {ok, {inet6, Addr}}
             end
     end.
 
@@ -428,5 +428,5 @@ get_all_messages(Acc) ->
         M ->
             [M | Acc]
     after 0 ->
-        lists:reverse(Acc)
+            lists:reverse(Acc)
     end.
