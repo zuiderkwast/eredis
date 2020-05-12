@@ -1,25 +1,40 @@
 language: erlang
+
 sudo: required
+
+services:
+  - docker
+
+# Install latest rebar3 and elvis
+before_install:
+  - git clone https://github.com/erlang/rebar3.git && cd rebar3 && git checkout 3.13.1 && ./bootstrap && sudo mv rebar3 /usr/local/bin/ && cd ..
+  - git clone https://github.com/inaka/elvis.git && cd elvis && rebar3 escriptize && sudo cp _build/default/bin/elvis /usr/bin && cd ..
+  - sudo docker info
+
 notifications:
   email: false
+
 otp_release:
-  - 21.0.1
-  - 20.3
-  - 19.3
-  - 19.2
-  - 19.1
-  - 19.0
-  - 18.3
-  - 18.2.1
-  - 18.1
-  - 17.5
-  - 17.4
-  - 17.3
-  - 17.1
-  - 17.0
-  - R16B03-1
-  - R16B03
-  - R16B02
-  - R16B01
-services:
-  - redis-server
+  - 22.1
+  # - 21.0.1
+  # - 20.3
+  # - 19.3
+  # - 18.3
+  # - 17.5
+  # - R16B03-1
+
+script:
+  - make elvis
+
+  - make clean
+  - make compile
+  - make xref
+  - make dialyzer
+
+  # - make edoc
+
+  - make test
+  - make cover
+
+after_success:
+  - make coveralls
