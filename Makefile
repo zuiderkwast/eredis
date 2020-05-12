@@ -1,33 +1,37 @@
-APP=eredis
+.PHONY: all compile clean test doc xref dialyzer elvis cover
 
-PRE17 := $(shell ERL_FLAGS="" erl -eval 'io:format("~s~n", [case re:run(erlang:system_info(otp_release), "^R") of nomatch -> ""; _ -> pre17 end]), halt().' -noshell)
+all: compile xref dialyzer elvis
 
-.PHONY: all compile clean Emakefile
-
-all: compile
-
-compile: ebin/$(APP).app Emakefile
-	erl -noinput -eval 'up_to_date = make:all()' -s erlang halt
+compile:
+	@rebar3 compile
 
 clean:
-	rm -f -- ebin/*.beam Emakefile ebin/$(APP).app
+	@rebar3 clean
+	@rm -rf _build
 
-ebin/$(APP).app: src/$(APP).app.src
-	mkdir -p ebin
-	cp -f -- $< $@
+test:
+	-@docker rm -f redis
+	@docker run --name redis -d --net=host redis:latest
+	@rebar3 eunit -v --cover
+	@docker rm -f redis
 
-ifdef DEBUG
-EXTRA_OPTS:=debug_info,
-endif
+edoc:
+	@rebar3 edoc skip_deps=true
 
-ifdef TEST
-EXTRA_OPTS:=$(EXTRA_OPTS) {d,'TEST', true},
-endif
+xref:
+	@rebar3 xref
 
-ifndef PRE17
-EXTRA_OPTS:=$(EXTRA_OPTS) {d,namespaced_types},
-endif
+dialyzer:
+	@rebar3 dialyzer
 
-Emakefile: Emakefile.src
-	sed "s/{{EXTRA_OPTS}}/$(EXTRA_OPTS)/" $< > $@
+elvis:
+	@elvis rock
 
+cover:
+	@rebar3 cover -v
+
+coveralls:
+	@rebar3 coveralls send
+
+coverview: cover
+	xdg-open _build/test/cover/index.html
