@@ -14,10 +14,6 @@
 
 -export([psubscribe/2, punsubscribe/2]).
 
--export([receiver/1, sub_example/0, pub_example/0]).
-
--export([psub_example/0, ppub_example/0]).
-
 %%
 %% PUBLIC API
 %%
@@ -40,7 +36,6 @@ start_link(Host, Port, Password, ReconnectSleep,
     eredis_sub_client:start_link(Host, Port, Password, ReconnectSleep,
                                  MaxQueueSize, QueueBehaviour).
 
-
 %% @doc: Callback for starting from poolboy
 -spec start_link(server_args()) -> {ok, Pid::pid()} | {error, Reason::term()}.
 start_link(Args) ->
@@ -55,7 +50,6 @@ start_link(Args) ->
 
 stop(Pid) ->
     eredis_sub_client:stop(Pid).
-
 
 -spec controlling_process(Client::pid()) -> ok.
 %% @doc: Make the calling process the controlling process. The
@@ -104,13 +98,11 @@ controlling_process(Client, Pid) ->
 controlling_process(Client, Pid, Timeout) ->
     gen_server:call(Client, {controlling_process, Pid}, Timeout).
 
-
 -spec ack_message(Client::pid()) -> ok.
 %% @doc: acknowledge the receipt of a pubsub message. each pubsub
 %% message must be acknowledged before the next one is received
 ack_message(Client) ->
     gen_server:cast(Client, {ack_message, self()}).
-
 
 %% @doc: Subscribe to the given channels. Returns immediately. The
 %% result will be delivered to the controlling process as any other
@@ -126,11 +118,11 @@ subscribe(Client, Channels) ->
 psubscribe(Client, Channels) ->
     gen_server:cast(Client, {psubscribe, self(), Channels}).
 
-
-
+-spec unsubscribe(pid(), [channel()]) -> ok.
 unsubscribe(Client, Channels) ->
     gen_server:cast(Client, {unsubscribe, self(), Channels}).
 
+-spec punsubscribe(pid(), [channel()]) -> ok.
 punsubscribe(Client, Channels) ->
     gen_server:cast(Client, {punsubscribe, self(), Channels}).
 
@@ -141,46 +133,42 @@ punsubscribe(Client, Channels) ->
 channels(Client) ->
     gen_server:call(Client, get_channels).
 
-
-
 %%
-%% STUFF FOR TRYING OUT PUBSUB
+%% Examples
 %%
 
-receiver(Sub) ->
-    receive
-        Msg ->
-            io:format("received ~p~n", [Msg]),
-            ack_message(Sub),
-            ?MODULE:receiver(Sub)
-    end.
+%% receiver(Sub) ->
+%%     receive
+%%         Msg ->
+%%             io:format("received ~p~n", [Msg]),
+%%             ack_message(Sub),
+%%             ?MODULE:receiver(Sub)
+%%     end.
 
-sub_example() ->
-    {ok, Sub} = start_link(),
-    Receiver = spawn_link(fun () ->
-                                  controlling_process(Sub),
-                                  subscribe(Sub, [<<"foo">>]),
-                                  receiver(Sub)
-                          end),
-    {Sub, Receiver}.
+%% sub_example() ->
+%%     {ok, Sub} = start_link(),
+%%     Receiver = spawn_link(fun () ->
+%%                                   controlling_process(Sub),
+%%                                   subscribe(Sub, [<<"foo">>]),
+%%                                   receiver(Sub)
+%%                           end),
+%%     {Sub, Receiver}.
 
-psub_example() ->
-    {ok, Sub} = start_link(),
-    Receiver = spawn_link(fun () ->
-                                  controlling_process(Sub),
-                                  psubscribe(Sub, [<<"foo*">>]),
-                                  receiver(Sub)
-                          end),
-    {Sub, Receiver}.
+%% psub_example() ->
+%%     {ok, Sub} = start_link(),
+%%     Receiver = spawn_link(fun () ->
+%%                                   controlling_process(Sub),
+%%                                   psubscribe(Sub, [<<"foo*">>]),
+%%                                   receiver(Sub)
+%%                           end),
+%%     {Sub, Receiver}.
 
-pub_example() ->
-    {ok, P} = eredis:start_link(),
-    eredis:q(P, ["PUBLISH", "foo", "bar"]),
-    eredis_client:stop(P).
+%% pub_example() ->
+%%     {ok, P} = eredis:start_link(),
+%%     eredis:q(P, ["PUBLISH", "foo", "bar"]),
+%%     eredis_client:stop(P).
 
-ppub_example() ->
-    {ok, P} = eredis:start_link(),
-    eredis:q(P, ["PUBLISH", "foo123", "bar"]),
-    eredis_client:stop(P).
-
-
+%% ppub_example() ->
+%%     {ok, P} = eredis:start_link(),
+%%     eredis:q(P, ["PUBLISH", "foo123", "bar"]),
+%%     eredis_client:stop(P).
