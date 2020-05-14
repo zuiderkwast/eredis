@@ -11,16 +11,40 @@ connect_test() ->
 
 connect_socket_options_test() ->
     ?assertMatch({ok, _}, eredis:start_link([{socket_options, [{keepalive, true}]}])),
-    ?assertMatch({ok, _}, eredis:start_link("localhost", 6379, 0, "",100, 5000, [{keepalive, true}])).
+    ?assertMatch({ok, _}, eredis:start_link("localhost", 6379, 0, "", 100, 5000, [{keepalive, true}])).
+
+connect_local_test() ->
+    process_flag(trap_exit, true),
+    eredis:start_link({local, "/var/run/redis.sock"}, 0, 0, "", no_reconnect),
+    IsDead = receive {'EXIT', _Pid, {connection_error, enoent}} -> died
+             after 400 -> still_alive end,
+    process_flag(trap_exit, false),
+    ?assertEqual(died, IsDead).
+
+stop_test() ->
+    process_flag(trap_exit, true),
+    C = c(),
+    ?assertMatch(ok, eredis:stop(C)),
+    IsDead = receive {'EXIT', _, _} -> died
+             after 1000 -> still_alive end,
+    process_flag(trap_exit, false),
+    ?assertEqual(died, IsDead),
+    ?assertExit({noproc, _}, eredis:q(C, ["SET", foo, bar])).
 
 get_set_test() ->
     C = c(),
-    ?assertMatch({ok, _}, eredis:q(C, ["DEL", foo])),
+    ?assertMatch({ok, _}, eredis:q(C, ["DEL", foo], 5000)),
 
     ?assertEqual({ok, undefined}, eredis:q(C, ["GET", foo])),
     ?assertEqual({ok, <<"OK">>}, eredis:q(C, ["SET", foo, bar])),
     ?assertEqual({ok, <<"bar">>}, eredis:q(C, ["GET", foo])).
 
+set_get_term_test() ->
+    C = c(),
+    ?assertMatch({ok, _}, eredis:q(C, ["DEL", term])),
+
+    ?assertEqual({ok, <<"OK">>}, eredis:q(C, ["SET", term, C])),
+    ?assertEqual({ok, term_to_binary(C)}, eredis:q(C, ["GET", term])).
 
 delete_test() ->
     C = c(),
@@ -36,7 +60,7 @@ mset_mget_test() ->
 
     ?assertMatch({ok, _}, eredis:q(C, ["DEL" | Keys])),
 
-    KeyValuePairs = [[K, K*2] || K <- Keys],
+    KeyValuePairs = [[K, K * 2] || K <- Keys],
     ExpectedResult = [list_to_binary(integer_to_list(K * 2)) || K <- Keys],
 
     ?assertEqual({ok, <<"OK">>}, eredis:q(C, ["MSET" | lists:flatten(KeyValuePairs)])),
@@ -92,6 +116,11 @@ pipeline_test() ->
                   {ok, [<<"1">>, [<<"2">>, <<"3">>]]}],
                  eredis:qp(C, P2)),
 
+    P3 = [],
+
+    ?assertEqual([],
+                 eredis:qp(C, P3, 5000)),
+
     ?assertMatch({ok, _}, eredis:q(C, ["DEL", a, b])).
 
 pipeline_mixed_test() ->
@@ -122,7 +151,12 @@ q_async_test() ->
     ?assertEqual(ok, eredis:q_async(C, ["GET", foo], self())),
     receive
         {response, Msg} ->
-            ?assertEqual(Msg, {ok, <<"bar">>}),
+            ?assertEqual(Msg, {ok, <<"bar">>})
+    end,
+    ?assertEqual(ok, eredis:q_async(C, ["GET", foo])),
+    receive
+        {response, Msg2} ->
+            ?assertEqual(Msg2, {ok, <<"bar">>}),
             ?assertMatch({ok, _}, eredis:q(C, ["DEL", foo]))
     end.
 
@@ -131,8 +165,6 @@ c() ->
     ?assertMatch({ok, _}, Res),
     {ok, C} = Res,
     C.
-
-
 
 c_no_reconnect() ->
     Res = eredis:start_link("127.0.0.1", 6379, 0, "", no_reconnect),
@@ -154,7 +186,19 @@ multibulk_test_() ->
     ].
 
 undefined_database_test() ->
-    ?assertMatch({ok,_}, eredis:start_link("localhost", 6379, undefined)).
+    ?assertMatch({ok, _}, eredis:start_link("localhost", 6379, undefined)).
+
+select_logical_database_test() ->
+    ?assertMatch({ok, _}, eredis:start_link("localhost", 6379, 2)).
+
+authentication_error_test() ->
+    process_flag(trap_exit, true),
+    Res = eredis:start_link("127.0.0.1", 6379, 4, "password", no_reconnect),
+    ?assertMatch({error, {authentication_error, _}}, Res),
+    IsDead = receive {'EXIT', _, _} -> died
+             after 1000 -> still_alive end,
+    process_flag(trap_exit, false),
+    ?assertEqual(died, IsDead).
 
 connection_failure_during_start_no_reconnect_test() ->
     process_flag(trap_exit, true),
@@ -174,6 +218,16 @@ connection_failure_during_start_reconnect_test() ->
              after 400 -> still_alive end,
     process_flag(trap_exit, false),
     ?assertEqual(still_alive, IsDead).
+
+unknown_client_call_test() ->
+    C = c(),
+    Request = {test},
+    ?assertEqual(unknown_request, gen_server:call(C, Request)).
+
+unknown_client_cast_test() ->
+    C = c(),
+    Request = {test},
+    ?assertEqual(ok, gen_server:cast(C, Request)).
 
 tcp_closed_test() ->
     C = c(),
