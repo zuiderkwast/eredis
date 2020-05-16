@@ -6,16 +6,19 @@
 -import(eredis, [create_multibulk/1]).
 
 connect_test() ->
+    ?assertMatch({ok, _}, eredis:start_link()),
     ?assertMatch({ok, _}, eredis:start_link("127.0.0.1", 6379)),
-    ?assertMatch({ok, _}, eredis:start_link("localhost", 6379)).
-
-connect_socket_options_test() ->
-    ?assertMatch({ok, _}, eredis:start_link([{socket_options, [{keepalive, true}]}])),
-    ?assertMatch({ok, _}, eredis:start_link("localhost", 6379, 0, "", 100, 5000, [{keepalive, true}])).
+    ?assertMatch({ok, _}, eredis:start_link("localhost", 6379)),
+    ?assertMatch({ok, _}, eredis:start_link("localhost", 6379, [{database, 0},
+                                                                {password, ""},
+                                                                {reconnect_sleep, 100},
+                                                                {connect_timeout, 5000},
+                                                                {socket_options, [{keepalive, true}]}
+                                                               ])).
 
 connect_local_test() ->
     process_flag(trap_exit, true),
-    eredis:start_link({local, "/var/run/redis.sock"}, 0, 0, "", no_reconnect),
+    eredis:start_link({local, "/var/run/redis.sock"}, 0, [{reconnect_sleep, no_reconnect}]),
     IsDead = receive {'EXIT', _Pid, {connection_error, enoent}} -> died
              after 400 -> still_alive end,
     process_flag(trap_exit, false),
@@ -160,18 +163,6 @@ q_async_test() ->
             ?assertMatch({ok, _}, eredis:q(C, ["DEL", foo]))
     end.
 
-c() ->
-    Res = eredis:start_link(),
-    ?assertMatch({ok, _}, Res),
-    {ok, C} = Res,
-    C.
-
-c_no_reconnect() ->
-    Res = eredis:start_link("127.0.0.1", 6379, 0, "", no_reconnect),
-    ?assertMatch({ok, _}, Res),
-    {ok, C} = Res,
-    C.
-
 multibulk_test_() ->
     [?_assertEqual(<<"*3\r\n$3\r\nSET\r\n$3\r\nfoo\r\n$3\r\nbar\r\n">>,
                    list_to_binary(create_multibulk(["SET", "foo", "bar"]))),
@@ -186,14 +177,17 @@ multibulk_test_() ->
     ].
 
 undefined_database_test() ->
-    ?assertMatch({ok, _}, eredis:start_link("localhost", 6379, undefined)).
+    ?assertMatch({ok, _}, eredis:start_link("localhost", 6379, [{database, undefined}])).
 
 select_logical_database_test() ->
-    ?assertMatch({ok, _}, eredis:start_link("localhost", 6379, 2)).
+    ?assertMatch({ok, _}, eredis:start_link("localhost", 6379, [{database, 2},
+                                                                {reconnect_sleep, no_reconnect}])).
 
 authentication_error_test() ->
     process_flag(trap_exit, true),
-    Res = eredis:start_link("127.0.0.1", 6379, 4, "password", no_reconnect),
+    Res = eredis:start_link("127.0.0.1", 6379, [{database, 4},
+                                                {password, "password"},
+                                                {reconnect_sleep, no_reconnect}]),
     ?assertMatch({error, {authentication_error, _}}, Res),
     IsDead = receive {'EXIT', _, _} -> died
              after 1000 -> still_alive end,
@@ -202,7 +196,8 @@ authentication_error_test() ->
 
 connection_failure_during_start_no_reconnect_test() ->
     process_flag(trap_exit, true),
-    Res = eredis:start_link("localhost", 6378, 0, "", no_reconnect),
+    Res = eredis:start_link("localhost", 6378, [{reconnect_sleep, no_reconnect},
+                                                {connect_timeout, 1000}]),
     ?assertMatch({error, _}, Res),
     IsDead = receive {'EXIT', _, _} -> died
              after 1000 -> still_alive end,
@@ -211,7 +206,7 @@ connection_failure_during_start_no_reconnect_test() ->
 
 connection_failure_during_start_reconnect_test() ->
     process_flag(trap_exit, true),
-    Res = eredis:start_link("localhost", 6378, 0, "", 100),
+    Res = eredis:start_link("localhost", 6378, [{reconnect_sleep, 100}]),
     ?assertMatch({ok, _}, Res),
     {ok, ClientPid} = Res,
     IsDead = receive {'EXIT', ClientPid, _} -> died
@@ -236,6 +231,10 @@ tcp_closed_test() ->
 tcp_closed_no_reconnect_test() ->
     C = c_no_reconnect(),
     tcp_closed_rig(C).
+
+%%
+%% Helpers
+%%
 
 tcp_closed_rig(C) ->
     %% fire async requests to add to redis client queue and then trick
@@ -276,3 +275,15 @@ gather_remote_queries([Pid | Rest], Acc) ->
         10000 ->
             error({gather_remote_queries, timeout})
     end.
+
+c() ->
+    Res = eredis:start_link(),
+    ?assertMatch({ok, _}, Res),
+    {ok, C} = Res,
+    C.
+
+c_no_reconnect() ->
+    Res = eredis:start_link("127.0.0.1", 6379, [{reconnect_sleep, no_reconnect}]),
+    ?assertMatch({ok, _}, Res),
+    {ok, C} = Res,
+    C.
