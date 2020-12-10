@@ -5,7 +5,7 @@ Non-blocking Redis client with focus on performance and robustness.
 Improvements and changes compared to `wooga/eredis`:
 
 * Support of TLS introduced in Redis 6
-* Changed API: `start_link` takes a proplist with options
+* Add `start_link/1` to allow it to be used with Poolboy
 * Correction regarding chunked error responses
 * Correction regarding termination of the reconnect process
 * Dialyzer corrections
@@ -143,7 +143,7 @@ commands you provided.
 
 ### Connect a client: start_link/0-3
 
-To start the client, use any of the `eredis:start_link/0,2,3`
+To start the client, use any of the `eredis:start_link/0,1,2,3`
 functions. They all include sensible defaults. `start_link/3` takes
 the following arguments:
 
@@ -155,7 +155,8 @@ the following arguments:
   * `reconnect_sleep`: integer of milliseconds to sleep between reconnect attempts, default: 1000
   * `connect_timeout`: timeout value in milliseconds to use in the connect, default: 5000
   * `socket_options`: proplist of options used when connecting the socket, default is `?SOCKET_OPTS`
-  * `tls`: enabling TLS and a proplist of options used when establishing the TLS connection, default is off
+  * `tls`: enabling TLS and a proplist of [options](https://erlang.org/doc/man/ssl.html)
+    used when establishing the TLS connection, default is off
 
 ## Reconnecting on Redis down / network failure / timeout / etc
 
@@ -210,7 +211,7 @@ appropriately, even when reconnecting after a timeout.
 
 ## Benchmarking
 
-Using basho_bench(https://github.com/basho/basho_bench/) you may
+Using [basho_bench](https://github.com/basho/basho_bench/) you may
 benchmark Eredis on your own hardware using the provided config and
 driver. See `priv/basho_bench_driver_eredis.config` and
 `src/basho_bench_driver_eredis.erl`.
@@ -278,6 +279,9 @@ having the client explicitly use `gen_tcp:recv/2` to fetch the entire
 bulk at once.
 
 ## Credits
+
+This is a fork of the original Eredis. Eredis was created by Knut Nesheim, with
+inspiration from the earlier Erldis.
 
 Although this project is almost a complete rewrite, many patterns are
 the same as you find in Erldis, most notably the queueing of requests.
