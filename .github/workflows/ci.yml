@@ -7,7 +7,7 @@ on:
       # this job on pull_request events for branches that look like fork
       # branches. Without this we would end up running this job twice for non
       # forked PRs, once for the push and then once for opening the PR.
-    - '**:**'
+      - '**:**'
 
 jobs:
   ci:
@@ -60,6 +60,13 @@ jobs:
         run: |
           sudo apt update
           sudo apt install -yy --no-install-recommends faketime
+
+      - name: Linter for yaml
+        uses: karancode/yamllint-github-action@master
+        with:
+          yamllint_comment: true
+          yamllint_format: standard
+          yamllint_config_datapath: "{extends: default, rules: {line-length: {max: 100}}}"
 
       - name: Build and test
         run: |
